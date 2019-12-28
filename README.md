@@ -9,7 +9,7 @@ kubernetes-setup with vagrant and ansible
 vagrant up
 
 # to halt and resume the cluster.
-vagrant halt
+vagrant suspend
 vagrant resume
 
 # to destroy all vms
