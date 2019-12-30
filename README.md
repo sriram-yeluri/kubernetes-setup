@@ -50,3 +50,16 @@ kube-scheduler-k8s-master                  1/1     Running   0          7m18s
 vagrant ssh node-1
 vagrant ssh node-2
 ```
+
+```sh
+# running a cluster with kubeadm on virtual machine, below steps are needed.
+vagrant ssh node-1
+ip a # get the ip-address of node
+sudo vi /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+Environment="KUBELET_EXTRA_ARGS=--node-ip=<worker IP address>"
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+
+kubectl get nodes -o wide
+# ip of node will change, now we can access logs and connect to pods with exec.
+```
