@@ -15,33 +15,44 @@
       - gnupg-agent
       - software-properties-common
 
-  - name: Add an apt signing key for Docker
-    apt_key:
-      url: https://download.docker.com/linux/ubuntu/gpg
-      state: present
+# Adding necessary steps to use containerd as CRI runtime.
+  - name: create containerd.conf file
+    copy: 
+      dest: /etc/modules-load.d/containerd.conf
+      content: |
+        overlay
+        br_netfilter
 
-  - name: Add apt repository for stable version
-    apt_repository:
-      repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu xenial stable
-      state: present
+  - name: modprobe overlay
+    command: modprobe overlay
+    become : yes
 
-  - name: Install docker and its dependecies
+  - name: modprobe br_netfilter
+    command: modprobe br_netfilter
+    become : yes
+
+  - name: Setup required sysctl params, these persist across reboots. 
+    copy:
+      dest: /etc/sysctl.d/99-kubernetes-cri.conf
+      content: |
+        net.bridge.bridge-nf-call-iptables  = 1
+        net.ipv4.ip_forward                 = 1
+        net.bridge.bridge-nf-call-ip6tables = 1
+
+  - name:  Apply sysctl params without reboot
+    command: sysctl --system
+    become: yes
+
+  - name: Install container runtime
     apt: 
       name: "{{ packages }}"
       state: present
       update_cache: yes
     vars:
       packages:
-      - docker-ce 
-      - docker-ce-cli 
-      - containerd.io
+      - containerd
     notify:
-      - docker status
-
-  - name: Add vagrant user to docker group
-    user:
-      name: vagrant
-      group: docker
+      - containerd status
 
   - name: Remove swapfile from /etc/fstab
     mount:
@@ -85,12 +96,12 @@
 
   - name: Restart kubelet
     service:
-      name: kubelet
-      daemon_reload: yes
       state: restarted
+      daemon_reload: yes
+      name: kubelet
 
   - name: Initialize the Kubernetes cluster using kubeadm
-    command: kubeadm init --apiserver-advertise-address="192.168.50.10" --apiserver-cert-extra-sans="192.168.50.10"  --node-name k8s-master --pod-network-cidr=192.168.0.0/16
+    command: kubeadm init --apiserver-advertise-address="192.168.56.10" --apiserver-cert-extra-sans="192.168.56.10"  --node-name k8s-master --pod-network-cidr=192.168.0.0/16
 
   - name: Setup kubeconfig for vagrant user
     command: "{{ item }}"
@@ -99,9 +110,16 @@
      - cp -i /etc/kubernetes/admin.conf /home/vagrant/.kube/config
      - chown vagrant:vagrant /home/vagrant/.kube/config
 
+  - name: Restart kubelet
+    service:
+      state: restarted
+      daemon_reload: yes
+      name: kubelet
+
+  # https://projectcalico.docs.tigera.io/getting-started/kubernetes/quickstart
   - name: Install calico pod network
     become: false
-    command: kubectl apply -f https://docs.projectcalico.org/v3.8/manifests/calico.yaml
+    command: kubectl create -f https://docs.projectcalico.org/manifests/tigera-operator.yaml
 
   - name: Generate join command
     command: kubeadm token create --print-join-command
@@ -112,8 +130,7 @@
     local_action: copy content="{{ join_command.stdout_lines[0] }}" dest="./join-command"
 
   handlers:
-    - name: docker status
-      service: name=docker state=started
-                    
+    - name: containerd status
+      service: name=containerd state=started
 
  
