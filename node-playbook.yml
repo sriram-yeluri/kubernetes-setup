@@ -61,7 +61,7 @@
       mode: '0755'
 
   - name: Generate containerd config file
-    ansible.builtin.shell: containerd config default | /etc/containerd/config.toml
+    ansible.builtin.shell: containerd config default | tee /etc/containerd/config.toml
 
   - name: Set SystemCgroup
     ansible.builtin.command: sed -i 's/ SystemdCgroup = false/  SystemdCgroup = true/' /etc/containerd/config.toml
