@@ -54,6 +54,23 @@
     notify:
       - containerd status
 
+  - name: create containerd folder
+    ansible.builtin.file:
+      path: /etc/containerd
+      state: directory
+      mode: '0755'
+
+  - name: Generate containerd config file
+    ansible.builtin.shell: containerd config default | tee /etc/containerd/config.toml
+
+  - name: Set SystemCgroup
+    ansible.builtin.command: sed -i 's/ SystemdCgroup = false/  SystemdCgroup = true/' /etc/containerd/config.toml
+  
+  - name: Restart containerd
+    service:
+      state: restarted
+      name: containerd
+
   - name: Remove swapfile from /etc/fstab
     mount:
       name: "{{ item }}"
@@ -94,19 +111,27 @@
       path: /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
       line: Environment="KUBELET_EXTRA_ARGS=--node-ip={{ node_ip }}"
 
-  - name: Restart kubelet
-    service:
-      state: restarted
-      daemon_reload: yes
+  - name: daemon reload
+    systemd: daemon_reload=yes
+
+  - name: 
+    ansible.builtin.service:
       name: kubelet
+      state: restarted
 
   - name: Initialize the Kubernetes cluster using kubeadm
     command: kubeadm init --apiserver-advertise-address="192.168.56.10" --apiserver-cert-extra-sans="192.168.56.10"  --node-name k8s-master --pod-network-cidr=192.168.0.0/16
 
   - name: Setup kubeconfig for vagrant user
+    ansible.builtin.file:
+      path: /home/vagrant/.kube
+      state: directory
+      mode: '0755'
+
+  - name: Setup kubeconfig for vagrant user
     command: "{{ item }}"
     with_items:
-     - mkdir -p /home/vagrant/.kube
+    #  - mkdir -p /home/vagrant/.kube
      - cp -i /etc/kubernetes/admin.conf /home/vagrant/.kube/config
      - chown vagrant:vagrant /home/vagrant/.kube/config
 
@@ -132,5 +157,4 @@
   handlers:
     - name: containerd status
       service: name=containerd state=started
-
  

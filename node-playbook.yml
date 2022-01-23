@@ -54,6 +54,23 @@
     notify:
       - containerd status
 
+  - name: create containerd folder
+    ansible.builtin.file:
+      path: /etc/containerd
+      state: directory
+      mode: '0755'
+
+  - name: Generate containerd config file
+    ansible.builtin.shell: containerd config default | /etc/containerd/config.toml
+
+  - name: Set SystemCgroup
+    ansible.builtin.command: sed -i 's/ SystemdCgroup = false/  SystemdCgroup = true/' /etc/containerd/config.toml
+  
+  - name: Restart containerd
+    service:
+      state: restarted
+      name: containerd
+
   - name: Remove swapfile from /etc/fstab
     mount:
       name: "{{ item }}"
@@ -110,6 +127,4 @@
   handlers:
     - name: containerd status
       service: name=containerd state=started  
-        
-
  
